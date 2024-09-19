@@ -3,8 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Cinemachine.Utility;
 using UnityEditor;
+using UnityEditor.SearchService;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -18,9 +18,14 @@ public struct InvokerService
     private Dictionary<ParameterInfo, int> _savedInts;
     private Dictionary<ParameterInfo, float> _savedFloats;
     private Dictionary<ParameterInfo, bool> _savedBools;
-    private Dictionary<ParameterInfo, SerializedProperty> _savedObjects;
+    private Dictionary<ParameterInfo, GameObject> _savedObjects;
 
-    public InvokerService(Component component)
+
+    private readonly Dictionary<Type, Func<ParameterInfo, object>> _typeHandler;
+    
+    
+
+    public InvokerService(Component component) : this()
     {
         _component = component;
         _componentType = _component.GetType();
@@ -30,8 +35,18 @@ public struct InvokerService
         _savedInts = new Dictionary<ParameterInfo, int>();
         _savedFloats = new Dictionary<ParameterInfo, float>();
         _savedBools = new Dictionary<ParameterInfo, bool>();
-        _savedObjects = new Dictionary<ParameterInfo, SerializedProperty>();
+        _savedObjects = new Dictionary<ParameterInfo, GameObject>();
 
+        var invoker = this;
+
+        _typeHandler = new Dictionary<Type, Func<ParameterInfo, object>>()
+        {
+            {typeof(string), parInfo => invoker.GetValue(parInfo, invoker._savedStrings, label => EditorGUILayout.TextField(label), "") },
+            {typeof(int), parInfo => invoker.GetValue(parInfo, invoker._savedInts, label => EditorGUILayout.IntField(label), 0) },
+            { typeof(float), parInfo => invoker.GetValue(parInfo, invoker._savedFloats, label => EditorGUILayout.FloatField(label), 0) },
+            { typeof(bool), parInfo => invoker.GetValue(parInfo, invoker._savedBools, label => EditorGUILayout.Toggle(label), false) },
+            { typeof(GameObject), parInfo => invoker.GetValue(parInfo, invoker._savedObjects, label => (GameObject)EditorGUILayout.ObjectField(label, typeof(GameObject), true), null) }
+        };
     }
 
     public MethodInfo[] GetMethods() => _componentType.GetMethods(_bindingFlags);
@@ -51,14 +66,6 @@ public struct InvokerService
         var method = _componentType.GetMethod(methodName, _bindingFlags, null, types, null);
         return method?.Invoke(_component, parameters);
     }
-
-    public static bool MethodHasParameters(MethodInfo methodInfo) =>
-        methodInfo?.GetParameters().Length > 0;
-    
-    
-    public IEnumerable<Type> GetUnderlyingParameterTypes(MethodInfo methodInfo) =>
-        methodInfo.GetParameters().Select(pi => pi.ParameterType);
-    
     public T GetValue<T>(ParameterInfo parInfo, Dictionary<ParameterInfo, T> storage, Func<T, T> editorFunc, T defaultValue)
     {
         if (!storage.ContainsKey(parInfo))
@@ -73,37 +80,13 @@ public struct InvokerService
     
     public object GetParameterTypes(ParameterInfo parInfo)
     {
-        var str = parInfo.ParameterType.ToString();
-        // Todo! Kan dit beter? Misch als iemand een genie vind een wens hierop gebruiken?
-        switch (str)
+        var parameterType = parInfo.ParameterType;
+
+        if (_typeHandler.TryGetValue(parameterType, out var handler))
         {
-            case "System.String":
-                return GetValue(parInfo, _savedStrings, label => EditorGUILayout.TextField(label), "");
-                break;
-            case "System.Int32":
-                return GetValue(parInfo, _savedInts, label => EditorGUILayout.IntField(label), 0);
-                break;
-            case "System.Single":
-                return GetValue(parInfo, _savedFloats, label => EditorGUILayout.FloatField(label), 0);
-                break;
-            case "System.Boolean":
-                return GetValue(parInfo, _savedBools, label => EditorGUILayout.Toggle(label), false);
-                break;
-            /*case "System.Object" :
-                return GetValue(parInfo, _savedObjects, label =>
-                {
-                    EditorGUILayout.ObjectField(label);
-                    return label;
-                }, default);*/
-                default:
-                break;
+            return handler(parInfo);
         }
+        
         return null;
     }
 }
-
-
-
-
-
-

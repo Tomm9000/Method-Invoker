@@ -1,9 +1,10 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using System;
 using System.Reflection;
+using Unity.VisualScripting.FullSerializer;
+using UnityEngine.UIElements;
 
 [CustomEditor(typeof(GameObject))]
 public class ComponentFilter : Editor
@@ -18,22 +19,18 @@ public class ComponentFilter : Editor
     private MethodInfo[] _allMethods = Array.Empty<MethodInfo>();
 
     private bool[] _methodFoldouts;
+    private bool _showMethodInvoker;
     
     public override void OnInspectorGUI()
     {
-        DrawBaseInspector();
+        DrawDefaultInspector();
         EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
-
         RenderMethodInvoker();
-        RenderComponentFilter();
-        
+        EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
     }
     
     private void RenderMethodInvoker()
     {
-        _showMethodInvoker = EditorGUILayout.Foldout(_showMethodInvoker, "Method Invoker", EditorStyles.foldoutHeader);
-        if (!_showMethodInvoker) return;
-        
         _targetComponent = (Component) EditorGUILayout.ObjectField("Script: ", _targetComponent, typeof(Component));
         
         if (GUI.changed)
@@ -60,11 +57,10 @@ public class ComponentFilter : Editor
             var currentMethodInfo = _allMethods[i];
 
             GUILayout.FlexibleSpace();
+
             _methodFoldouts[i] = EditorGUILayout.Foldout(_methodFoldouts[i], currentMethodInfo.Name +":", EditorStyles.foldoutHeader);
             if (_methodFoldouts[i])
             {
-
-                
                 EditorGUILayout.BeginVertical();
 
                 var parameters = currentMethodInfo.GetParameters();
@@ -85,9 +81,9 @@ public class ComponentFilter : Editor
                 if (GUILayout.Button("Invoke", GUILayout.MinWidth(500), GUILayout.Width(100)))
                     _invokerService?.Invoke(currentMethodInfo.Name, argList.ToArray());
                 EditorGUILayout.EndVertical();
+                
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
-
                 EditorGUILayout.Separator();
             }
         }
